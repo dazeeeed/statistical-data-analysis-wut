@@ -5,7 +5,7 @@
 
 # Install pacman if not available and load packages
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(pacman, rio, here, ggplot2, dplyr, tidyr, stringr)
+pacman::p_load(pacman, rio, here, ggplot2, dplyr, tidyr, stringr, MASS, pracma)
 
 here()
 # Data preparation
@@ -27,14 +27,25 @@ data_cities <- data[data$station_name %in% cities, ]
 data_cities$station_name <- as.factor(data_cities$station_name)
 
 
-###############################################################
+################################################################################
 # Check differences between max_daily_temp for different cities
-###############################################################
-#plot(data_cities$station_name, data_cities$max_daily_temp)
+################################################################################
+
+# Plot
+# plot(data_cities$station_name, data_cities$max_daily_temp)
+pdf(file=here("project_01", "data", "graphics", 
+              "max_daily_temp_box.pdf"),
+    width = 7,
+    height = 5,
+    onefile = TRUE
+)
+par(oma=c(1, 1, 1, 1))
+
 boxplot(data_cities$max_daily_temp ~ data_cities$station_name,
-        xlab="City", ylab="Temperature [\u00B0C]",
+        xlab="City", ylab="Temperature (Tmax) [\u00B0C]",
         main="Maximum daily temperature by city"
 )
+dev.off()
 
 # Get additional descriptive statistics using dplyr
 additional_stats<- data_cities %>% 
@@ -44,21 +55,30 @@ additional_stats<- data_cities %>%
 
 additional_stats
 
-###############################################################
+################################################################################
 # Check daily temperature fluctuations (day-night)
-###############################################################
+################################################################################
 data_cities$daily_temp_fluctuation <- data_cities$max_daily_temp - 
   data_cities$min_daily_temp
 
+# Plot
+pdf(file=here("project_01", "data", "graphics", 
+              "max_daily_temp_diff_box.pdf"),
+    width = 7,
+    height = 5,
+    onefile = TRUE
+)
+par(oma=c(1, 1, 1, 1))
 
 boxplot(data_cities$daily_temp_fluctuation ~ data_cities$station_name,
-        xlab="City", ylab="Temperature difference [\u00B0C]",
+        xlab="City", ylab="Temperature difference (Tmax-Tmin) [\u00B0C]",
         main="Daily temperature fluctuation by city"
 )
+dev.off()
 
-###############################################################
+################################################################################
 # Check how does max_daily_temp change day by day
-###############################################################
+################################################################################
 data_cities <- data_cities %>% 
   group_by(station_name) %>%
   mutate(max_daily_temp_day_change = max_daily_temp - lag(max_daily_temp, 1))
@@ -66,27 +86,33 @@ data_cities <- data_cities %>%
 data_cities$max_daily_temp_day_change <- tidyr::replace_na(
   data_cities$max_daily_temp_day_change, 0)
 
+# Plots
+pdf(file=here("project_01", "data", "graphics", 
+              "max_daily_temp_change_daily_box.pdf"),
+    width = 7,
+    height = 5,
+    onefile = TRUE
+)
+par(oma=c(1, 1, 1, 1))
 
 boxplot(data_cities$max_daily_temp_day_change ~ data_cities$station_name,
-        xlab="City", ylab="Temperature [\u00B0C]",
+        xlab="City", ylab="Temperature (Tmax_tomorrow-Tmax_today) [\u00B0C]",
         main="Day by day max temperature fluctuation by city"
 )
+dev.off()
 
-# Put graphs in 3 rows and 1 column
-par(mfrow = c(3, 1))
+pdf(file=here("project_01", "data", "graphics", 
+              "max_daily_temp_change_daily_hist.pdf"),
+    width = 7,
+    height = 7,
+    onefile = TRUE
+)
+
+par(mfrow = c(3, 1), oma=c(1, 1, 1, 1))
 x_range <- c(-10, 10)
 hist_breaks <- seq(from=-10, to=10, by=1)
 colors <- c("red", "purple", "blue")
-plot_scale_factor <- 1
-
-# Histograms for each species using options
-# ?pdf
-# pdf(file="freq_max_daily_temp_change.pdf", 
-#     width = 7, 
-#     height = 7, 
-#     units="in", 
-#     noRStudioGD = TRUE
-# )
+plot_scale_factor <- 1.5
 
 for(i in 1:length(cities)){
   hist(data_cities$max_daily_temp_day_change[data_cities$station_name == 
@@ -95,7 +121,7 @@ for(i in 1:length(cities)){
        breaks = hist_breaks,
        main = paste("Frequency of day by day change in max daily temperature", 
                     "in", str_to_sentence(cities[i])),
-       xlab = "Temperature difference [\u00B0C]",
+       xlab = "Temperature (Tmax_tomorrow-Tmax_today) [\u00B0C]",
        col = colors[i],
        cex.lab=plot_scale_factor, 
        cex.axis=plot_scale_factor, 
@@ -104,13 +130,49 @@ for(i in 1:length(cities)){
 }
 dev.off()
 
+################################################################################
+# More detailed analysis of max daily temp change in Warszawa-Bielany
+################################################################################
+?hist
+data_warsaw = data_cities$max_daily_temp_day_change[data_cities$station_name == 
+                                                      "WARSZAWA-BIELANY"]
+
+fit <- MASS::fitdistr(data_warsaw, densfun = "normal")
+?MASS::fitdistr
+
+# Plot
+pdf(file=here("project_01", "data", "graphics", 
+              "max_daily_temp_change_daily_hist_WARSZAWA.pdf"),
+    width = 7,
+    height = 5,
+    onefile = TRUE
+)
+par(oma=c(1, 1, 1, 1))
+
+hist(data_warsaw,
+     xlim = x_range,
+     breaks = hist_breaks,
+     main = paste("Probability density of day by day change in max daily\n temperature", 
+                  "in Warszawa-Bielany"),
+     xlab = "Temperature (Tmax_tomorrow-Tmax_today) [\u00B0C]",
+     prob = TRUE
+)
+curve(dnorm(x, fit$estimate[1], fit$estimate[2]), col = "red", add = TRUE)
+dev.off()
+
+# Calculate probability of max daily temp change in range <-1, 1>
+temp_range <- c(-1, 1)
+1/2 * (erf((temp_range[2] - fit$estimate[1]) / (fit$estimate[2] * sqrt(2))) - 
+  erf((temp_range[1] - fit$estimate[1]) / (fit$estimate[2] * sqrt(2))))
+
+
+
+
+
 # Restore graphic parameter
 par(mfrow=c(1, 1))
 rm(x_range, hist_breaks)
 
-
-?median
-?rm
 
 # CLEANUP
 # Clear environment
