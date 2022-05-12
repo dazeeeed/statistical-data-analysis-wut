@@ -5,7 +5,7 @@
 
 # Install pacman if not available and load packages
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(pacman, rio, here, ggplot2, dplyr, tidyr, stringr)
+pacman::p_load(pacman, rio, here, ggplot2, dplyr, tidyr, stringr, MASS)
 
 here()
 # Data preparation
@@ -24,3 +24,22 @@ names(data) <- col_names
 city <- "PSZCZYNA"
 
 data_city <- data[data$station_name == city, ]
+
+data_city_monthly <- data_city %>% 
+  group_by(month) %>% 
+  summarize(mean_avg_daily_temp = mean(avg_daily_temp),
+            median_avg_daily_temp = median(avg_daily_temp))
+
+
+plot(data_city_monthly$month, data_city_monthly$mean_avg_daily_temp)
+
+
+# CLEANUP
+# Clear environment
+rm(list = ls()) 
+
+# Clear packages
+p_unload(all)
+
+# Clear console
+cat("\014")
